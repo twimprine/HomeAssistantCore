@@ -1,4 +1,5 @@
 """Support for Litter-Robot binary sensors."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -12,64 +13,44 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .coordinator import LitterRobotConfigEntry
 from .entity import LitterRobotEntity, _RobotT
-from .hub import LitterRobotHub
 
 
-@dataclass
-class RequiredKeysMixin(Generic[_RobotT]):
-    """A class that describes robot binary sensor entity required keys."""
+@dataclass(frozen=True, kw_only=True)
+class RobotBinarySensorEntityDescription(
+    BinarySensorEntityDescription, Generic[_RobotT]
+):
+    """A class that describes robot binary sensor entities."""
 
     is_on_fn: Callable[[_RobotT], bool]
 
 
-@dataclass
-class RobotBinarySensorEntityDescription(
-    BinarySensorEntityDescription, RequiredKeysMixin[_RobotT]
-):
-    """A class that describes robot binary sensor entities."""
-
-
-class LitterRobotBinarySensorEntity(LitterRobotEntity[_RobotT], BinarySensorEntity):
-    """Litter-Robot binary sensor entity."""
-
-    entity_description: RobotBinarySensorEntityDescription[_RobotT]
-
-    @property
-    def is_on(self) -> bool:
-        """Return the state."""
-        return self.entity_description.is_on_fn(self.robot)
-
-
 BINARY_SENSOR_MAP: dict[type[Robot], tuple[RobotBinarySensorEntityDescription, ...]] = {
-    LitterRobot: (
+    LitterRobot: (  # type: ignore[type-abstract]  # only used for isinstance check
         RobotBinarySensorEntityDescription[LitterRobot](
             key="sleeping",
-            name="Sleeping",
-            icon="mdi:sleep",
+            translation_key="sleeping",
             entity_category=EntityCategory.DIAGNOSTIC,
             entity_registry_enabled_default=False,
             is_on_fn=lambda robot: robot.is_sleeping,
         ),
         RobotBinarySensorEntityDescription[LitterRobot](
             key="sleep_mode",
-            name="Sleep mode",
-            icon="mdi:sleep",
+            translation_key="sleep_mode",
             entity_category=EntityCategory.DIAGNOSTIC,
             entity_registry_enabled_default=False,
             is_on_fn=lambda robot: robot.sleep_mode_enabled,
         ),
     ),
-    Robot: (
+    Robot: (  # type: ignore[type-abstract]  # only used for isinstance check
         RobotBinarySensorEntityDescription[Robot](
             key="power_status",
-            name="Power status",
+            translation_key="power_status",
             device_class=BinarySensorDeviceClass.PLUG,
             entity_category=EntityCategory.DIAGNOSTIC,
             entity_registry_enabled_default=False,
@@ -81,15 +62,28 @@ BINARY_SENSOR_MAP: dict[type[Robot], tuple[RobotBinarySensorEntityDescription, .
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: LitterRobotConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Litter-Robot binary sensors using config entry."""
-    hub: LitterRobotHub = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     async_add_entities(
-        LitterRobotBinarySensorEntity(robot=robot, hub=hub, description=description)
-        for robot in hub.account.robots
+        LitterRobotBinarySensorEntity(
+            robot=robot, coordinator=coordinator, description=description
+        )
+        for robot in coordinator.account.robots
         for robot_type, entity_descriptions in BINARY_SENSOR_MAP.items()
         if isinstance(robot, robot_type)
         for description in entity_descriptions
     )
+
+
+class LitterRobotBinarySensorEntity(LitterRobotEntity[_RobotT], BinarySensorEntity):
+    """Litter-Robot binary sensor entity."""
+
+    entity_description: RobotBinarySensorEntityDescription[_RobotT]
+
+    @property
+    def is_on(self) -> bool:
+        """Return the state."""
+        return self.entity_description.is_on_fn(self.robot)

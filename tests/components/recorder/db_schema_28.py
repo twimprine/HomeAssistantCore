@@ -3,6 +3,7 @@
 This file contains the model definitions for schema version 28.
 It is used to test the schema migration logic.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -11,7 +12,7 @@ import logging
 import time
 from typing import Any, TypedDict, cast, overload
 
-from fnvhash import fnv1a_32
+from fnv_hash_fast import fnv1a_32
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -42,10 +43,9 @@ from homeassistant.const import (
     MAX_LENGTH_STATE_STATE,
 )
 from homeassistant.core import Context, Event, EventOrigin, State, split_entity_id
-import homeassistant.util.dt as dt_util
+from homeassistant.util import dt as dt_util
 
 # SQLAlchemy Schema
-# pylint: disable=invalid-name
 Base = declarative_base()
 
 SCHEMA_VERSION = 28
@@ -292,6 +292,15 @@ class States(Base):  # type: ignore[misc,valid-type]
     context_user_id = Column(String(MAX_LENGTH_EVENT_CONTEXT_ID))
     context_parent_id = Column(String(MAX_LENGTH_EVENT_CONTEXT_ID))
     origin_idx = Column(SmallInteger)  # 0 is local, 1 is remote
+    context_id_bin = Column(
+        LargeBinary(CONTEXT_ID_BIN_MAX_LENGTH)
+    )  # *** Not originally in v28, only added for recorder to startup ok
+    context_user_id_bin = Column(
+        LargeBinary(CONTEXT_ID_BIN_MAX_LENGTH)
+    )  # *** Not originally in v28, only added for recorder to startup ok
+    context_parent_id_bin = Column(
+        LargeBinary(CONTEXT_ID_BIN_MAX_LENGTH)
+    )  # *** Not originally in v28, only added for recorder to startup ok
     metadata_id = Column(
         Integer, ForeignKey("states_meta.metadata_id"), index=True
     )  # *** Not originally in v28, only added for recorder to startup ok
@@ -645,13 +654,11 @@ class StatisticsRuns(Base):  # type: ignore[misc,valid-type]
 
 
 @overload
-def process_timestamp(ts: None) -> None:
-    ...
+def process_timestamp(ts: None) -> None: ...
 
 
 @overload
-def process_timestamp(ts: datetime) -> datetime:
-    ...
+def process_timestamp(ts: datetime) -> datetime: ...
 
 
 def process_timestamp(ts: datetime | None) -> datetime | None:
@@ -665,13 +672,11 @@ def process_timestamp(ts: datetime | None) -> datetime | None:
 
 
 @overload
-def process_timestamp_to_utc_isoformat(ts: None) -> None:
-    ...
+def process_timestamp_to_utc_isoformat(ts: None) -> None: ...
 
 
 @overload
-def process_timestamp_to_utc_isoformat(ts: datetime) -> str:
-    ...
+def process_timestamp_to_utc_isoformat(ts: datetime) -> str: ...
 
 
 def process_timestamp_to_utc_isoformat(ts: datetime | None) -> str | None:
@@ -689,12 +694,12 @@ class LazyState(State):
     """A lazy version of core State."""
 
     __slots__ = [
-        "_row",
+        "_attr_cache",
         "_attributes",
+        "_context",
         "_last_changed",
         "_last_updated",
-        "_context",
-        "_attr_cache",
+        "_row",
     ]
 
     def __init__(  # pylint: disable=super-init-not-called
@@ -813,7 +818,7 @@ class LazyState(State):
             "last_updated": last_updated_isoformat,
         }
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         """Return the comparison."""
         return (
             other.__class__ in [self.__class__, State]

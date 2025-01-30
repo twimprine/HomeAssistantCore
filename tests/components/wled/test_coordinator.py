@@ -1,4 +1,5 @@
 """Tests for the coordinator of the WLED integration."""
+
 import asyncio
 from collections.abc import Callable
 from copy import deepcopy
@@ -7,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from wled import (
     Device as WLEDDevice,
-    WLEDConnectionClosed,
+    WLEDConnectionClosedError,
     WLEDConnectionError,
     WLEDError,
 )
@@ -20,7 +21,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.core import HomeAssistant
-import homeassistant.util.dt as dt_util
+from homeassistant.util import dt as dt_util
 
 from tests.common import MockConfigEntry, async_fire_time_changed
 
@@ -124,7 +125,7 @@ async def test_websocket(
     assert state.state == STATE_OFF
 
     # Resolve Future with a connection losed.
-    connection_finished.set_exception(WLEDConnectionClosed)
+    connection_finished.set_exception(WLEDConnectionClosedError)
     await hass.async_block_till_done()
 
     # Disconnect called, unsubbed Home Assistant stop listener

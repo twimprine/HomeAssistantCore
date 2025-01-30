@@ -1,7 +1,6 @@
 {
   "domain": "bluetooth",
   "name": "Bluetooth",
-  "after_dependencies": ["hassio"],
   "codeowners": ["@bdraco"],
   "config_flow": true,
   "dependencies": ["usb"],
@@ -11,15 +10,17 @@
     "btsocket",
     "bleak_retry_connector",
     "bluetooth_adapters",
-    "bluetooth_auto_recovery"
+    "bluetooth_auto_recovery",
+    "habluetooth"
   ],
   "quality_scale": "internal",
   "requirements": [
-    "bleak==0.19.5",
-    "bleak-retry-connector==2.13.0",
-    "bluetooth-adapters==0.15.2",
-    "bluetooth-auto-recovery==1.0.3",
-    "bluetooth-data-tools==0.3.1",
-    "dbus-fast==1.84.1"
+    "bleak==0.22.3",
+    "bleak-retry-connector==3.8.0",
+    "bluetooth-adapters==0.21.1",
+    "bluetooth-auto-recovery==1.4.2",
+    "bluetooth-data-tools==1.22.0",
+    "dbus-fast==2.30.2",
+    "habluetooth==3.14.0"
   ]
 }

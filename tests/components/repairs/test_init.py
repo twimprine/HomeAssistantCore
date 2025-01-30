@@ -1,7 +1,9 @@
 """Test the repairs websocket API."""
+
 from unittest.mock import AsyncMock, Mock
 
-from freezegun import freeze_time
+from awesomeversion.exceptions import AwesomeVersionStrategyException
+from freezegun.api import FrozenDateTimeFactory
 import pytest
 
 from homeassistant.components.repairs import repairs_flow_manager
@@ -12,21 +14,24 @@ from homeassistant.components.repairs.issue_handler import (
 )
 from homeassistant.const import __version__ as ha_version
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.issue_registry import (
-    IssueSeverity,
-    async_create_issue,
-    async_delete_issue,
-    async_ignore_issue,
-    create_issue,
-    delete_issue,
-)
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 
 from tests.common import mock_platform
 from tests.typing import WebSocketGenerator
 
 
-@freeze_time("2022-07-19 07:53:05")
+@pytest.mark.parametrize(
+    "ignore_translations",
+    [
+        [
+            "component.test.issues.even_worse.title",
+            "component.test.issues.even_worse.description",
+            "component.test.issues.abc_123.title",
+        ]
+    ],
+)
+@pytest.mark.freeze_time("2022-07-19 07:53:05")
 async def test_create_update_issue(
     hass: HomeAssistant, hass_ws_client: WebSocketGenerator
 ) -> None:
@@ -65,7 +70,7 @@ async def test_create_update_issue(
     ]
 
     for issue in issues:
-        async_create_issue(
+        ir.async_create_issue(
             hass,
             issue["domain"],
             issue["issue_id"],
@@ -96,7 +101,7 @@ async def test_create_update_issue(
     }
 
     # Update an issue
-    async_create_issue(
+    ir.async_create_issue(
         hass,
         issues[0]["domain"],
         issues[0]["issue_id"],
@@ -124,7 +129,7 @@ async def test_create_update_issue(
     )
 
 
-@pytest.mark.parametrize("ha_version", ("2022.9.cat", "In the future: 2023.1.1"))
+@pytest.mark.parametrize("ha_version", ["2022.9.cat", "In the future: 2023.1.1"])
 async def test_create_issue_invalid_version(
     hass: HomeAssistant, hass_ws_client: WebSocketGenerator, ha_version
 ) -> None:
@@ -144,8 +149,8 @@ async def test_create_issue_invalid_version(
         "translation_placeholders": {"abc": "123"},
     }
 
-    with pytest.raises(Exception):
-        async_create_issue(
+    with pytest.raises(AwesomeVersionStrategyException):
+        ir.async_create_issue(
             hass,
             issue["domain"],
             issue["issue_id"],
@@ -165,7 +170,15 @@ async def test_create_issue_invalid_version(
     assert msg["result"] == {"issues": []}
 
 
-@freeze_time("2022-07-19 07:53:05")
+@pytest.mark.parametrize(
+    "ignore_translations",
+    [
+        [
+            "component.test.issues.abc_123.title",
+        ]
+    ],
+)
+@pytest.mark.freeze_time("2022-07-19 07:53:05")
 async def test_ignore_issue(
     hass: HomeAssistant, hass_ws_client: WebSocketGenerator
 ) -> None:
@@ -194,7 +207,7 @@ async def test_ignore_issue(
     ]
 
     for issue in issues:
-        async_create_issue(
+        ir.async_create_issue(
             hass,
             issue["domain"],
             issue["issue_id"],
@@ -226,7 +239,7 @@ async def test_ignore_issue(
 
     # Ignore a non-existing issue
     with pytest.raises(KeyError):
-        async_ignore_issue(hass, issues[0]["domain"], "no_such_issue", True)
+        ir.async_ignore_issue(hass, issues[0]["domain"], "no_such_issue", True)
 
     await client.send_json({"id": 3, "type": "repairs/list_issues"})
     msg = await client.receive_json()
@@ -246,7 +259,7 @@ async def test_ignore_issue(
     }
 
     # Ignore an existing issue
-    async_ignore_issue(hass, issues[0]["domain"], issues[0]["issue_id"], True)
+    ir.async_ignore_issue(hass, issues[0]["domain"], issues[0]["issue_id"], True)
 
     await client.send_json({"id": 4, "type": "repairs/list_issues"})
     msg = await client.receive_json()
@@ -266,7 +279,7 @@ async def test_ignore_issue(
     }
 
     # Ignore the same issue again
-    async_ignore_issue(hass, issues[0]["domain"], issues[0]["issue_id"], True)
+    ir.async_ignore_issue(hass, issues[0]["domain"], issues[0]["issue_id"], True)
 
     await client.send_json({"id": 5, "type": "repairs/list_issues"})
     msg = await client.receive_json()
@@ -286,7 +299,7 @@ async def test_ignore_issue(
     }
 
     # Update an ignored issue
-    async_create_issue(
+    ir.async_create_issue(
         hass,
         issues[0]["domain"],
         issues[0]["issue_id"],
@@ -313,7 +326,7 @@ async def test_ignore_issue(
     )
 
     # Unignore the same issue
-    async_ignore_issue(hass, issues[0]["domain"], issues[0]["issue_id"], False)
+    ir.async_ignore_issue(hass, issues[0]["domain"], issues[0]["issue_id"], False)
 
     await client.send_json({"id": 7, "type": "repairs/list_issues"})
     msg = await client.receive_json()
@@ -334,8 +347,15 @@ async def test_ignore_issue(
     }
 
 
+@pytest.mark.parametrize(
+    "ignore_translations",
+    ["component.fake_integration.issues.abc_123.title"],
+)
+@pytest.mark.freeze_time("2022-07-19 07:53:05")
 async def test_delete_issue(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, freezer
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Test we can delete an issue."""
     freezer.move_to("2022-07-19 07:53:05")
@@ -357,7 +377,7 @@ async def test_delete_issue(
     ]
 
     for issue in issues:
-        async_create_issue(
+        ir.async_create_issue(
             hass,
             issue["domain"],
             issue["issue_id"],
@@ -388,7 +408,7 @@ async def test_delete_issue(
     }
 
     # Delete a non-existing issue
-    async_delete_issue(hass, issues[0]["domain"], "no_such_issue")
+    ir.async_delete_issue(hass, issues[0]["domain"], "no_such_issue")
 
     await client.send_json({"id": 2, "type": "repairs/list_issues"})
     msg = await client.receive_json()
@@ -408,7 +428,7 @@ async def test_delete_issue(
     }
 
     # Delete an existing issue
-    async_delete_issue(hass, issues[0]["domain"], issues[0]["issue_id"])
+    ir.async_delete_issue(hass, issues[0]["domain"], issues[0]["issue_id"])
 
     await client.send_json({"id": 3, "type": "repairs/list_issues"})
     msg = await client.receive_json()
@@ -417,7 +437,7 @@ async def test_delete_issue(
     assert msg["result"] == {"issues": []}
 
     # Delete the same issue again
-    async_delete_issue(hass, issues[0]["domain"], issues[0]["issue_id"])
+    ir.async_delete_issue(hass, issues[0]["domain"], issues[0]["issue_id"])
 
     await client.send_json({"id": 4, "type": "repairs/list_issues"})
     msg = await client.receive_json()
@@ -429,7 +449,7 @@ async def test_delete_issue(
     freezer.move_to("2022-07-19 08:53:05")
 
     for issue in issues:
-        async_create_issue(
+        ir.async_create_issue(
             hass,
             issue["domain"],
             issue["issue_id"],
@@ -460,6 +480,7 @@ async def test_delete_issue(
     }
 
 
+@pytest.mark.no_fail_on_log_exception
 async def test_non_compliant_platform(
     hass: HomeAssistant, hass_ws_client: WebSocketGenerator
 ) -> None:
@@ -484,7 +505,11 @@ async def test_non_compliant_platform(
     assert list(hass.data[DOMAIN]["platforms"].keys()) == ["fake_integration"]
 
 
-@freeze_time("2022-07-21 08:22:00")
+@pytest.mark.parametrize(
+    "ignore_translations",
+    ["component.fake_integration.issues.abc_123.title"],
+)
+@pytest.mark.freeze_time("2022-07-21 08:22:00")
 async def test_sync_methods(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
@@ -502,7 +527,7 @@ async def test_sync_methods(
     assert msg["result"] == {"issues": []}
 
     def _create_issue() -> None:
-        create_issue(
+        ir.create_issue(
             hass,
             "fake_integration",
             "sync_issue",
@@ -510,7 +535,7 @@ async def test_sync_methods(
             is_fixable=True,
             is_persistent=False,
             learn_more_url="https://theuselessweb.com",
-            severity=IssueSeverity.ERROR,
+            severity=ir.IssueSeverity.ERROR,
             translation_key="abc_123",
             translation_placeholders={"abc": "123"},
         )
@@ -540,7 +565,7 @@ async def test_sync_methods(
     }
 
     await hass.async_add_executor_job(
-        delete_issue, hass, "fake_integration", "sync_issue"
+        ir.delete_issue, hass, "fake_integration", "sync_issue"
     )
     await client.send_json({"id": 3, "type": "repairs/list_issues"})
     msg = await client.receive_json()
